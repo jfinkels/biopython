@@ -1,4 +1,5 @@
 # Copyright 2001 by Gavin E. Crooks.  All rights reserved.
+# Copyright 2010 Jeffrey Finkelstein
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -75,7 +76,7 @@ class Record:
         else:
             s.append("-")
         s.append(self.description)        
-        return "\t".join(map(str,s)) + "\n"
+        return "\t".join(map(str,s)) #+ "\n"
 
 
 def parse(handle):

@@ -300,8 +300,7 @@ class Scop:
         nodes = self._sunidDict.values()
         # We order nodes to ease comparison with original file
         nodes.sort(key = lambda n: n.sunid)
-        for n in nodes:
-            handle.write(str(n.toHieRecord()))
+        handle.writelines([str(n.toHieRecord()) + '\n' for n in nodes])
 
 
     def write_des(self, handle):
@@ -309,9 +308,8 @@ class Scop:
         nodes = self._sunidDict.values()
         # Origional SCOP file is not ordered?
         nodes.sort(key = lambda n: n.sunid)
-        for n in nodes:
-            if n != self.root:
-                handle.write(str(n.toDesRecord()))
+        handle.writelines([str(n.toDesRecord()) + '\n' for n in nodes \
+                               if n != self.root])
 
 
     def write_cla(self, handle):

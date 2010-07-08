@@ -86,7 +86,7 @@ class Record:
         else:
             s.append('-')
 
-        return "\t".join(s) + "\n"
+        return "\t".join(s) #+ "\n"
 
 
 def parse(handle):
