@@ -1,4 +1,5 @@
 # Copyright 2001 by Gavin E. Crooks.  All rights reserved.
+# Copyright 2010 Jeffrey Finkelstein
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -36,8 +37,20 @@ class ClaTests(unittest.TestCase):
         try: 
             for line in f:
                 record = Cla.Record(line)
-                #End of line is platform dependent. Strip it off
-                self.assertEqual(str(record).rstrip(), line.rstrip())
+                # The SCOP Classification file format which can be found at
+                # http://scop.mrc-lmb.cam.ac.uk/scop/release-notes.html states
+                # that the list of classification hierarchy key-value pairs is
+                # unordered, therefore we need only check that they are all
+                # there, NOT that they are in the same order.
+                #
+                # End of line is platform dependent. Strip it off
+                expected_hierarchy = line.rstrip().split('\t')[5].split(',')
+                hierarchy = str(record).rstrip().split('\t')[5].split(',')
+                expected_hierarchy = dict([pair.split('=') for pair in expected_hierarchy])
+                hierarchy = dict([pair.split('=') for pair in hierarchy])
+                self.assertEqual(len(hierarchy), len(expected_hierarchy))
+                for key, value in hierarchy.items():
+                    self.assertEqual(value, expected_hierarchy[key])
         finally:
             f.close()        
 
@@ -56,13 +69,13 @@ class ClaTests(unittest.TestCase):
         self.assertEqual(record.residues.fragments, (('T','',''),('U','91','106')))
         self.assertEqual(record.sccs, 'b.1.2.1')
         self.assertEqual(record.sunid, 21953)
-        self.assertEqual(record.hierarchy, [['cl',48724],
-                                            ['cf',48725],
-                                            ['sf',49265],
-                                            ['fa',49266],
-                                            ['dm',49267],
-                                            ['sp',49268],
-                                            ['px',21953]])
+        self.assertEqual(record.hierarchy, {'cl' : 48724,
+                                            'cf' : 48725,
+                                            'sf' : 49265,
+                                            'fa' : 49266,
+                                            'dm' : 49267,
+                                            'sp' : 49268,
+                                            'px' : 21953})
 
     def testIndex(self):
         """Test CLA file indexing"""

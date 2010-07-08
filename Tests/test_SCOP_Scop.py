@@ -1,4 +1,5 @@
 # Copyright 2001 by Gavin E. Crooks.  All rights reserved.
+# Copyright 2010 Jeffrey Finkelstein
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -14,6 +15,25 @@ from Bio.SCOP import *
 
 class ScopTests(unittest.TestCase):
 
+    def _compare_cla_lines(self, cla_line_1, cla_line_2):
+        """ Compares the two specified Cla lines for equality.
+        
+        The order of the key-value pairs in the sixth field of the lines does
+        not matter. For more information, see
+        http://scop.mrc-lmb.cam.ac.uk/scop/release-notes.html
+        """
+        fields1 = cla_line_1.rstrip().split('\t')
+        fields2 = cla_line_2.rstrip().split('\t')
+        # the first five fields in a Cla line should be the same
+        for i in range(5):
+            if fields1[i] != fields2[i]:
+                return False
+        # get the hierarchy key-value pairs, which are unordered
+        hierarchy1 = set(fields1[5].split(','))
+        hierarchy2 = set(fields2[5].split(','))
+        if hierarchy1 != hierarchy2:
+            return False
+        return True
 
     def testParse(self):
   
@@ -35,7 +55,10 @@ class ScopTests(unittest.TestCase):
 
         cla_out = StringIO()
         scop.write_cla(cla_out)
-        self.assertEqual(cla_out.getvalue(), cla)
+        for line, expected_line in zip(cla.rstrip().split('\n'), \
+                                           cla_out.getvalue().rstrip() \
+                                           .split('\n')):
+            self.assertTrue(self._compare_cla_lines(line, expected_line))
         
         des_out = StringIO()
         scop.write_des(des_out)
