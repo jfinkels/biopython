@@ -371,7 +371,7 @@ class GenBankWriter(_InsdcWriter):
         if isinstance(date, list) and len(date)==1 :
             date = date[0]
         #TODO - allow a Python date object
-        if not isinstance(date, str) or len(date) != 11 \
+        if not isinstance(date, basestring) or len(date) != 11 \
         or date[2] != "-" or date[6] != "-" \
         or not date[:2].isdigit() or not date[7:].isdigit() \
         or int(date[:2]) > 31 \
@@ -1045,7 +1045,7 @@ if __name__ == "__main__":
         #This only checks key shared qualifiers
         #Would a white list be easier?
         #for key in ["name", "gene", "translation", "codon_table", "codon_start", "locus_tag"]:
-        for key in set(old.qualifiers.keys()).intersection(new.qualifiers.keys()):
+        for key in set(old.qualifiers).intersection(new.qualifiers):
             if key in ["db_xref", "protein_id", "product", "note"]:
                 #EMBL and GenBank files are use different references/notes/etc
                 continue
