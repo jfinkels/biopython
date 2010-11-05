@@ -16,7 +16,7 @@ try:
     from Bio.Phylo import PhyloXMLIO
 except ImportError:
     # TODO: should we issue a warning? the installer will have already whined
-    # raise MissingExternalDependencyError(
+    # raise MissingPythonDependencyError(
     #         "Install an ElementTree implementation if you want to use "
     #         "Bio.Phylo to parse phyloXML files.")
     supported_formats = {
@@ -75,8 +75,6 @@ def read(file, format):
     else:
         raise ValueError(
                 "There are multiple trees in this file; use parse() instead.")
-
-    return getattr(supported_formats[format], 'read')(file)
 
 
 def write(trees, file, format, **kwargs):

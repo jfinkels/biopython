@@ -22,8 +22,8 @@ import warnings
 
 from Bio.Phylo import PhyloXML as PX
 
-if (3, 0, 0) <= sys.version_info < (3, 1, 2):
-    # Workaround for cElementTree regression in python 3.0--3.1.1
+if (3, 0, 0) <= sys.version_info[:3] <= (3, 1, 2):
+    # Workaround for cElementTree regression in python 3.0--3.1.2
     # See http://bugs.python.org/issue9257
     from xml.etree import ElementTree
 else:
@@ -44,8 +44,8 @@ else:
                     try:
                         from elementtree import ElementTree
                     except ImportError:
-                        from Bio import MissingExternalDependencyError
-                        raise MissingExternalDependencyError(
+                        from Bio import MissingPythonDependencyError
+                        raise MissingPythonDependencyError(
                                 "No ElementTree module was found. "
                                 "Use Python 2.5+, lxml or elementtree if you "
                                 "want to use Bio.PhyloXML.")
@@ -114,7 +114,7 @@ def parse(file):
     """
     return Parser(file).parse()
 
-def write(obj, file, encoding='utf-8', indent=False):
+def write(obj, file, encoding='utf-8', indent=True):
     """Write a phyloXML file.
 
     The first argument is an instance of Phyloxml, Phylogeny or BaseTree.Tree,
@@ -678,7 +678,7 @@ class Writer(object):
         assert isinstance(phyloxml, PX.Phyloxml), "Not a Phyloxml object"
         self._tree = ElementTree.ElementTree(self.phyloxml(phyloxml))
 
-    def write(self, file, encoding='utf-8', indent=False):
+    def write(self, file, encoding='utf-8', indent=True):
         if indent:
             _indent(self._tree.getroot())
         self._tree.write(file, encoding)

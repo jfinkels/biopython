@@ -223,6 +223,8 @@ names are also used in Bio.AlignIO and include the following:
  - gb      - An alias for "genbank", for consistency with NCBI Entrez Utilities
  - ig      - The IntelliGenetics file format, apparently the same as the
              MASE alignment format.
+ - imgt    - An EMBL like format from IMGT where the feature tables are more
+             indented to allow for longer feature types.
  - phd     - Output from PHRED, used by PHRAP and CONSED for input.
  - pir     - A "FASTA like" format introduced by the National Biomedical
              Research Foundation (NBRF) for the Protein Information Resource
@@ -237,6 +239,8 @@ names are also used in Bio.AlignIO and include the following:
  - qual    - A "FASTA like" format holding PHRED quality values from
              sequencing DNA, but no actual sequences (usually provided
              in separate FASTA files).
+ - uniprot-xml - The UniProt XML format (replacement for the SwissProt plain
+             text format which we call "swiss")
 
 Note that while Bio.SeqIO can read all the above file formats, it cannot
 write to all of them.
@@ -307,7 +311,7 @@ import SffIO
 import SwissIO
 import TabIO
 import QualityIO #FastQ and qual files
-
+import UniprotIO
 
 #Convention for format names is "mainname-subtype" in lower case.
 #Please use the same names as BioPerl or EMBOSS where possible.
@@ -324,6 +328,7 @@ _FormatToIterator = {"fasta" : FastaIO.FastaIterator,
                      "genbank-cds" : InsdcIO.GenBankCdsFeatureIterator,
                      "embl" : InsdcIO.EmblIterator,
                      "embl-cds" : InsdcIO.EmblCdsFeatureIterator,
+                     "imgt" : InsdcIO.ImgtIterator,
                      "ig" : IgIO.IgIterator,
                      "swiss" : SwissIO.SwissIterator,
                      "phd" : PhdIO.PhdIterator,
@@ -338,12 +343,14 @@ _FormatToIterator = {"fasta" : FastaIO.FastaIterator,
                      "sff": SffIO.SffIterator,
                      #Not sure about this in the long run:
                      "sff-trim": SffIO._SffTrimIterator,
+                     "uniprot-xml": UniprotIO.UniprotIterator,
                      }
 
 _FormatToWriter = {"fasta" : FastaIO.FastaWriter,
                    "gb" : InsdcIO.GenBankWriter,
                    "genbank" : InsdcIO.GenBankWriter,
                    "embl" : InsdcIO.EmblWriter,
+                   "imgt" : InsdcIO.ImgtWriter,
                    "tab" : TabIO.TabWriter,
                    "fastq" : QualityIO.FastqPhredWriter,
                    "fastq-sanger" : QualityIO.FastqPhredWriter,
@@ -501,7 +508,7 @@ def parse(handle, format, alphabet=None):
             return iterator_generator(handle)
         try:
             return iterator_generator(handle, alphabet=alphabet)
-        except:
+        except TypeError:
             return _force_alphabet(iterator_generator(handle), alphabet)
     elif format in AlignIO._FormatToIterator:
         #Use Bio.AlignIO to read in the alignments
@@ -784,9 +791,10 @@ def to_alignment(sequences, alphabet=None, strict=True):
     >>> alignment = AlignIO.read(filename, "clustal")
     """
     import warnings
+    import Bio
     warnings.warn("The Bio.SeqIO.to_alignment(...) function is deprecated. "
                   "Please use the Bio.Align.MultipleSeqAlignment(...) object "
-                  "directly instead.", DeprecationWarning)
+                  "directly instead.", Bio.BiopythonDeprecationWarning)
     return MultipleSeqAlignment(sequences, alphabet)
 
 def convert(in_file, in_format, out_file, out_format, alphabet=None):
