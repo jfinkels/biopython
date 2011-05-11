@@ -157,7 +157,11 @@ class _FileIterator:
 
     def __del__(self):
         self.stream.close()
-        os.remove(self.fname)
+        try:
+            os.remove(self.fname)
+        except OSError:
+            #Jython seems to call the iterator twice
+            pass
 
 class _GenePopCommandline(AbstractCommandline):
     """ Command Line Wrapper for GenePop.
@@ -165,54 +169,27 @@ class _GenePopCommandline(AbstractCommandline):
     def __init__(self, genepop_dir=None, cmd='Genepop', **kwargs):
         self.parameters = [
                 _Argument(["command"],
-                    ["INTEGER(.INTEGER)*"],
-                    None,
-                    True,
-                    "GenePop option to be called"),
+                    "GenePop option to be called",
+                    is_required=True),
                 _Argument(["mode"],
-                    ["Dont touch this"],
-                    None,
-                    True,
-                    "Should allways be batch"),
+                    "Should allways be batch",
+                    is_required=True),
                 _Argument(["input"],
-                    ["input"],
-                    None,
-                    True,
-                    "Input file"),
+                    "Input file",
+                    is_required=True),
                 _Argument(["Dememorization"],
-                    ["input"],
-                    None,
-                    False,
                     "Dememorization step"),
                 _Argument(["BatchNumber"],
-                    ["input"],
-                    None,
-                    False,
                     "Number of MCMC batches"),
                 _Argument(["BatchLength"],
-                    ["input"],
-                    None,
-                    False,
                     "Length of MCMC chains"),
                 _Argument(["HWtests"],
-                    ["input"],
-                    None,
-                    False,
                     "Enumeration or MCMC"),
                 _Argument(["IsolBDstatistic"],
-                    ["input"],
-                    None,
-                    False,
                     "IBD statistic (a or e)"),
                 _Argument(["MinimalDistance"],
-                    ["input"],
-                    None,
-                    False,
                     "Minimal IBD distance"),
                 _Argument(["GeographicScale"],
-                    ["input"],
-                    None,
-                    False,
                     "Log or Linear"),
         ]
         AbstractCommandline.__init__(self, cmd, **kwargs)
@@ -279,17 +256,8 @@ class GenePopController:
         self.controller.set_input(fname)
         for opt in opts:
             self.controller.set_parameter(opt, opt+"="+str(opts[opt]))
-        child = subprocess.Popen(str(self.controller),
-                             stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE,
-                             shell=(sys.platform!="win32"))
-        r_out, e_out = child.communicate()
-        # capture error code:
-        ret = child.returncode
-
+        self.controller() #checks error level is zero
         self._remove_garbage(None)
-        if ret != 0: raise IOError("GenePop not found")
         return
 
 

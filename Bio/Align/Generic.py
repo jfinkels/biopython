@@ -9,9 +9,10 @@
 Contains classes to deal with generic sequence alignment stuff not
 specific to a particular program or format.
 
-classes:
-o Alignment
+Classes:
+ - Alignment
 """
+__docformat__ = "epytext en" #Don't just use plain text in epydoc API pages!
 
 # biopython
 from Bio.Seq import Seq
@@ -19,23 +20,24 @@ from Bio.SeqRecord import SeqRecord
 from Bio import Alphabet
 
 class Alignment:
-    """Represent a set of alignments (OBSOLETE?).
+    """Represent a set of alignments (DEPRECATED).
 
     This is a base class to represent alignments, which can be subclassed
     to deal with an alignment in a specific format.
 
     With the introduction of the MultipleSeqAlignment class in Bio.Align,
-    this base class is effectively obsolete and will likely be deprecated and
-    later removed in future releases of Biopython.
+    this base class is deprecated and is likely to be removed in future
+    releases of Biopython.
     """
     def __init__(self, alphabet):
         """Initialize a new Alignment object.
 
         Arguments:
-        o alphabet - The alphabet to use for the sequence objects that are
-        created. This alphabet must be a gapped type.
+         - alphabet - The alphabet to use for the sequence objects that are
+                      created. This alphabet must be a gapped type.
 
         e.g.
+
         >>> from Bio.Alphabet import IUPAC, Gapped
         >>> align = Alignment(Gapped(IUPAC.unambiguous_dna, "-"))
         >>> align.add_sequence("Alpha", "ACTGCTAGCTAG")
@@ -48,7 +50,8 @@ class Alignment:
         ACTGCTAGATAG Gamma
         """
         import warnings
-        warnings.warn("With the introduction of the MultipleSeqAlignment class in Bio.Align, this base class is effectively obsolete and will likely be deprecated and later removed in future releases of Biopython.", PendingDeprecationWarning)
+        import Bio
+        warnings.warn("With the introduction of the MultipleSeqAlignment class in Bio.Align, this base class is deprecated and is likely to be removed in a future release of Biopython.", Bio.BiopythonDeprecationWarning)
         if not (isinstance(alphabet, Alphabet.Alphabet) \
         or isinstance(alphabet, Alphabet.AlphabetEncoder)):
             raise ValueError("Invalid alphabet argument")
@@ -131,6 +134,7 @@ class Alignment:
         string.
 
         e.g.
+
         >>> from Bio.Alphabet import IUPAC, Gapped
         >>> align = Alignment(Gapped(IUPAC.unambiguous_dna, "-"))
         >>> align.add_sequence("Alpha", "ACTGCTAGCTAG")
@@ -197,6 +201,7 @@ class Alignment:
         """Iterate over alignment rows as SeqRecord objects.
 
         e.g.
+
         >>> from Bio.Alphabet import IUPAC, Gapped
         >>> align = Alignment(Gapped(IUPAC.unambiguous_dna, "-"))
         >>> align.add_sequence("Alpha", "ACTGCTAGCTAG")
@@ -215,26 +220,21 @@ class Alignment:
         return iter(self._records) 
 
     def get_seq_by_num(self, number):
-        """Retrieve a sequence by row number (OBSOLETE).
+        """Retrieve a sequence by row number (DEPRECATED).
 
         Returns:
-        o A Seq object for the requested sequence.
+         - A Seq object for the requested sequence.
 
         Raises:
-        o IndexError - If the specified number is out of range.
+         - IndexError - If the specified number is out of range.
 
         NOTE: This is a legacy method.  In new code where you need to access
         the rows of the alignment (i.e. the sequences) consider iterating
-        over them or accessing them as SeqRecord objects.  e.g.
-
-        for record in alignment:
-            print record.id
-            print record.seq
-        first_record = alignment[0]
-        last_record = alignment[-1]
+        over them or accessing them as SeqRecord objects.
         """
         import warnings
-        warnings.warn("This is a legacy method. In new code where you need to access the rows of the alignment (i.e. the sequences) consider iterating over them or accessing them as SeqRecord objects.", PendingDeprecationWarning)
+        import Bio
+        warnings.warn("This is a legacy method and is likely to be removed in a future release of Biopython. In new code where you need to access the rows of the alignment (i.e. the sequences) consider iterating over them or accessing them as SeqRecord objects.", Bio.BiopythonDeprecationWarning)
         return self._records[number].seq
 
     def __len__(self):
@@ -288,19 +288,19 @@ class Alignment:
         sequences.
 
         Arguments:
-        o descriptor - The descriptive id of the sequence being added.
+         - descriptor - The descriptive id of the sequence being added.
                        This will be used as the resulting SeqRecord's
                        .id property (and, for historical compatibility,
                        also the .description property)
-        o sequence - A string with sequence info.
-        o start - You can explicitly set the start point of the sequence.
-        This is useful (at least) for BLAST alignments, which can just
-        be partial alignments of sequences.
-        o end - Specify the end of the sequence, which is important
-        for the same reason as the start.
-        o weight - The weight to place on the sequence in the alignment.
-        By default, all sequences have the same weight. (0.0 => no weight,
-        1.0 => highest weight)
+         - sequence - A string with sequence info.
+         - start - You can explicitly set the start point of the sequence.
+                   This is useful (at least) for BLAST alignments, which can
+                   just be partial alignments of sequences.
+         - end - Specify the end of the sequence, which is important
+                 for the same reason as the start.
+         - weight - The weight to place on the sequence in the alignment.
+                    By default, all sequences have the same weight. (0.0 =>
+                    no weight, 1.0 => highest weight)
         """
         new_seq = Seq(sequence, self._alphabet)
 
@@ -334,6 +334,7 @@ class Alignment:
         """Returns a string containing a given column.
 
         e.g.
+
         >>> from Bio.Alphabet import IUPAC, Gapped
         >>> align = Alignment(Gapped(IUPAC.unambiguous_dna, "-"))
         >>> align.add_sequence("Alpha", "ACTGCTAGCTAG")

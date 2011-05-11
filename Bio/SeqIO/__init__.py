@@ -112,7 +112,7 @@ keep the output 100% identical to the input). For example,
     >>> record_dict = SeqIO.index("Fasta/f002", "fasta")
     >>> len(record_dict)
     3
-    >>> print record_dict.get_raw("gi|1348917|gb|G26685|G26685")
+    >>> print record_dict.get_raw("gi|1348917|gb|G26685|G26685").decode()
     >gi|1348917|gb|G26685|G26685 human STS STS_D11734.
     CGGAGCCAGCGAGCATATGCTGCATGAGGACCTTTCTATCTTACATTATGGCTGGGAATCTTACTCTTTC
     ATCTGATACCTTGTTCAGATTTCAAAATAGTTGTAGCCTTATCCTGGTTTTACAGATGTGAAACTTTCAA
@@ -133,7 +133,10 @@ keep the output 100% identical to the input). For example,
     <BLANKLINE>
 
 Here the original file and what Biopython would output differ in the line
-wrapping.
+wrapping. Also note that under Python 3, the get_raw method will return a
+bytes string, hence the use of decode to turn it into a (unicode) string.
+This is uncessary on Python 2.
+
 
 Input - Alignments
 ==================
@@ -172,6 +175,7 @@ Or, using a handle::
 You are expected to call this function once (with all your records) and if
 using a handle, make sure you close it to flush the data to the hard disk.
 
+
 Output - Advanced
 =================
 The effect of calling write() multiple times on a single file will vary
@@ -201,6 +205,7 @@ the Bio.SeqIO.write(...) function for sequence file conversion. Using
 generator expressions or generator functions provides a memory efficient way
 to perform filtering or other extra operations as part of the process.
 
+
 File Formats
 ============
 When specifying the file format, use lowercase strings.  The same format
@@ -217,8 +222,10 @@ names are also used in Bio.AlignIO and include the following:
  - fastq-solexa - Original Solexa/Illumnia variant of the FASTQ format which
              encodes Solexa quality scores (not PHRED quality scores) with an
              ASCII offset of 64.
- - fastq-illumina - Solexa/Illumnia 1.3+ variant of the FASTQ format which
-             encodes PHRED quality scores with an ASCII offset of 64 (not 33).
+ - fastq-illumina - Solexa/Illumina 1.3 to 1.7 variant of the FASTQ format
+             which encodes PHRED quality scores with an ASCII offset of 64
+             (not 33). Note as of version 1.8 of the CASAVA pipeline Illumina
+             will produce FASTQ files using the standard Sanger encoding.
  - genbank - The GenBank or GenPept flat file format.
  - gb      - An alias for "genbank", for consistency with NCBI Entrez Utilities
  - ig      - The IntelliGenetics file format, apparently the same as the
@@ -482,6 +489,8 @@ def parse(handle, format, alphabet=None):
     #string mode (see the leading r before the opening quote).
     from Bio import AlignIO
 
+    handle_close = False
+    
     if isinstance(handle, basestring):
         #Hack for SFF, will need to make this more general in future
         if format in _BinaryFormats :
@@ -489,6 +498,7 @@ def parse(handle, format, alphabet=None):
         else :
             handle = open(handle, "rU")
         #TODO - On Python 2.5+ use with statement to close handle
+        handle_close = True
 
     #Try and give helpful error messages:
     if not isinstance(format, basestring):
@@ -505,18 +515,24 @@ def parse(handle, format, alphabet=None):
     if format in _FormatToIterator:
         iterator_generator = _FormatToIterator[format]
         if alphabet is None:
-            return iterator_generator(handle)
-        try:
-            return iterator_generator(handle, alphabet=alphabet)
-        except TypeError:
-            return _force_alphabet(iterator_generator(handle), alphabet)
+            i = iterator_generator(handle)
+        else:
+            try:
+                i = iterator_generator(handle, alphabet=alphabet)
+            except TypeError:
+                i = _force_alphabet(iterator_generator(handle), alphabet)
     elif format in AlignIO._FormatToIterator:
         #Use Bio.AlignIO to read in the alignments
         #TODO - Can this helper function can be replaced with a generator
         #expression, or something from itertools?
-        return _iterate_via_AlignIO(handle, format, alphabet)
+        i = _iterate_via_AlignIO(handle, format, alphabet)
     else:
         raise ValueError("Unknown format '%s'" % format)
+    #This imposes some overhead... wait until we drop Python 2.4 to fix it
+    for r in i:
+        yield r
+    if handle_close:
+        handle.close()
 
 #This is a generator function
 def _iterate_via_AlignIO(handle, format, alphabet):
@@ -750,6 +766,8 @@ def index(filename, format, alphabet=None, key_function=None):
     would impose a severe performance penalty as it would require the file
     to be completely parsed while building the index. Right now this is
     usually avoided.
+    
+    See also: Bio.SeqIO.index_db() and Bio.SeqIO.to_dict()
     """
     #Try and give helpful error messages:
     if not isinstance(filename, basestring):
@@ -766,11 +784,73 @@ def index(filename, format, alphabet=None, key_function=None):
 
     #Map the file format to a sequence iterator:    
     import _index #Lazy import
-    try:
-        indexer = _index._FormatToIndexedDict[format]
-    except KeyError:
-        raise ValueError("Unsupported format '%s'" % format)
-    return indexer(filename, format, alphabet, key_function)
+    return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
+
+def index_db(index_filename, filenames=None, format=None, alphabet=None,
+               key_function=None):
+    """Index several sequence files and return a dictionary like object.
+
+    The index is stored in an SQLite database rather than in memory (as in the
+    Bio.SeqIO.index(...) function).
+    
+     - index_filename - Where to store the SQLite index
+     - filenames - list of strings specifying file(s) to be indexed, or when
+                  indexing a single file this can be given as a string.
+                  (optional if reloading an existing index, but must match)
+     - format   - lower case string describing the file format
+                  (optional if reloading an existing index, but must match)
+     - alphabet - optional Alphabet object, useful when the sequence type
+                  cannot be automatically inferred from the file itself
+                  (e.g. format="fasta" or "tab")
+     - key_function - Optional callback function which when given a
+                  SeqRecord identifier string should return a unique
+                  key for the dictionary.
+    
+    This indexing function will return a dictionary like object, giving the
+    SeqRecord objects as values:
+
+    >>> from Bio.Alphabet import generic_protein
+    >>> from Bio import SeqIO
+    >>> files = ["GenBank/NC_000932.faa", "GenBank/NC_005816.faa"]
+    >>> def get_gi(name):
+    ...     parts = name.split("|")
+    ...     i = parts.index("gi")
+    ...     assert i != -1
+    ...     return parts[i+1]
+    >>> idx_name = ":memory:" #use an in memory SQLite DB for this test
+    >>> records = SeqIO.index_db(idx_name, files, "fasta", generic_protein, get_gi)
+    >>> len(records)
+    95
+    >>> records["7525076"].description
+    'gi|7525076|ref|NP_051101.1| Ycf2 [Arabidopsis thaliana]'
+    >>> records["45478717"].description
+    'gi|45478717|ref|NP_995572.1| pesticin [Yersinia pestis biovar Microtus str. 91001]'
+
+    In this example the two files contain 85 and 10 records respectively.
+    
+    See also: Bio.SeqIO.index() and Bio.SeqIO.to_dict()
+    """
+    #Try and give helpful error messages:
+    if not isinstance(index_filename, basestring):
+        raise TypeError("Need a string for the index filename")
+    if isinstance(filenames, basestring):
+        #Make the API a little more friendly, and more similar
+        #to Bio.SeqIO.index(...) for indexing just one file.
+        filenames = [filenames]
+    if filenames is not None and not isinstance(filenames, list):
+        raise TypeError("Need a list of filenames (as strings), or one filename")
+    if format is not None and not isinstance(format, basestring):
+        raise TypeError("Need a string for the file format (lower case)")
+    if format and format != format.lower():
+        raise ValueError("Format string '%s' should be lower case" % format)
+    if alphabet is not None and not (isinstance(alphabet, Alphabet) or \
+                                     isinstance(alphabet, AlphabetEncoder)):
+        raise ValueError("Invalid alphabet, %s" % repr(alphabet))
+
+    #Map the file format to a sequence iterator:    
+    import _index #Lazy import
+    return _index._SQLiteManySeqFilesDict(index_filename, filenames, format,
+                                          alphabet, key_function)
 
 def to_alignment(sequences, alphabet=None, strict=True):
     """Returns a multiple sequence alignment (DEPRECATED).

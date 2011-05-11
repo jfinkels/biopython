@@ -19,7 +19,6 @@ import sys
 
 from Bio import Alphabet
 from Bio.Alphabet import IUPAC
-from Bio.SeqRecord import SeqRecord
 from Bio.Data.IUPACData import ambiguous_dna_complement, ambiguous_rna_complement
 from Bio.Data import CodonTable
 
@@ -254,7 +253,7 @@ class Seq(object):
         >>> Seq("ACGT", generic_dna) + Seq("ACGU", generic_rna)
         Traceback (most recent call last):
            ...
-        TypeError: Incompatable alphabets DNAAlphabet() and RNAAlphabet()
+        TypeError: Incompatible alphabets DNAAlphabet() and RNAAlphabet()
 
         You can't add nucleotide and protein sequences:
 
@@ -262,13 +261,13 @@ class Seq(object):
         >>> Seq("ACGT", generic_dna) + Seq("MELKI", generic_protein)
         Traceback (most recent call last):
            ...
-        TypeError: Incompatable alphabets DNAAlphabet() and ProteinAlphabet()
+        TypeError: Incompatible alphabets DNAAlphabet() and ProteinAlphabet()
         """
         if hasattr(other, "alphabet"):
             #other should be a Seq or a MutableSeq
             if not Alphabet._check_type_compatible([self.alphabet,
                                                     other.alphabet]):
-                raise TypeError("Incompatable alphabets %s and %s" \
+                raise TypeError("Incompatible alphabets %s and %s" \
                                 % (repr(self.alphabet), repr(other.alphabet)))
             #They should be the same sequence type (or one of them is generic)
             a = Alphabet._consensus_alphabet([self.alphabet, other.alphabet])
@@ -276,7 +275,8 @@ class Seq(object):
         elif isinstance(other, basestring):
             #other is a plain string - use the current alphabet
             return self.__class__(str(self) + other, self.alphabet)
-        elif isinstance(other, SeqRecord):
+        from Bio.SeqRecord import SeqRecord #Lazy to avoid circular imports
+        if isinstance(other, SeqRecord):
             #Get the SeqRecord's __radd__ to handle this
             return NotImplemented
         else :
@@ -1215,13 +1215,49 @@ class UnknownSeq(Seq):
         return other + Seq(str(self), self.alphabet)
 
     def __getitem__(self, index):
+        """Get a subsequence from the UnknownSeq object.
+        
+        >>> unk = UnknownSeq(8, character="N")
+        >>> print unk[:]
+        NNNNNNNN
+        >>> print unk[5:3]
+        <BLANKLINE>
+        >>> print unk[1:-1]
+        NNNNNN
+        >>> print unk[1:-1:2]
+        NNN
+        """
         if isinstance(index, int):
             #TODO - Check the bounds without wasting memory
             return str(self)[index]
+        old_length = self._length
+        step = index.step
+        if step is None or step == 1:
+            #This calculates the length you'd get from ("N"*old_length)[index]
+            start = index.start
+            end = index.stop
+            if start is None:
+                start = 0
+            elif start < 0:
+                start = max(0, old_length + start)
+            elif start > old_length:
+                start = old_length
+            if end is None:
+                end = old_length
+            elif end < 0:
+                end = max(0, old_length + end)
+            elif end > old_length:
+                end = old_length
+            new_length = max(0, end-start)
+        elif step == 0:
+            raise ValueError("slice step cannot be zero")
         else:
-            #TODO - Work out the length without wasting memory
-            return UnknownSeq(len(("#"*self._length)[index]),
-                              self.alphabet, self._character)
+            #TODO - handle step efficiently
+            new_length = len(("X"*old_length)[index])
+        #assert new_length == len(("X"*old_length)[index]), \
+        #       (index, start, end, step, old_length,
+        #        new_length, len(("X"*old_length)[index]))
+        return UnknownSeq(new_length, self.alphabet, self._character)
 
     def count(self, sub, start=0, end=sys.maxint):
         """Non-overlapping count method, like that of a python string.

@@ -27,8 +27,8 @@ except ImportError:
     from StringIO import StringIO
 import warnings
 try:
-    if (3,0,0) <= sys.version_info[:3] <= (3,1,2):
-        #workaround for bug in python 3 to 3.1.2  see http://bugs.python.org/issue9257
+    if (3,0,0) <= sys.version_info[:3] <= (3,1,3):
+        #workaround for bug in python 3 to 3.1.3  see http://bugs.python.org/issue9257
         from xml.etree import ElementTree as ElementTree
     else:
         from xml.etree import cElementTree as ElementTree
@@ -46,17 +46,21 @@ except ImportError:
                 try:
                     from elementtree import ElementTree
                 except ImportError:
-                    from Bio import MissingExternalDependencyError
-                    raise MissingExternalDependencyError(
-                            "No ElementTree module was found. "
-                            "Use Python 2.5+, lxml or elementtree if you "
-                            "want to use Bio.SeqIO.UniprotIO.")
+                    ElementTree = None
+                    #TODO - Clean this up after we drop Python 2.4,
+                    #for now delay the error so the tests pass on Python 2.4
+                    #from Bio import MissingPythonDependencyError
+                    #raise MissingPythonDependencyError(
+                    #        "No ElementTree module was found. "
+                    #        "Use Python 2.5+, lxml or elementtree if you "
+                    #        "want to use Bio.SeqIO.UniprotIO.")
 
 NS = "{http://uniprot.org/uniprot}"
 REFERENCE_JOURNAL = "%(name)s %(volume)s:%(first)s-%(last)s(%(pub_date)s)"
 
 def UniprotIterator(handle, alphabet=Alphabet.ProteinAlphabet(), return_raw_comments=False):
-    '''Generator Function
+    """Generator function to parse UniProt XML as SeqRecord objects.
+    
     parses an XML entry at a time from any UniProt XML file 
     returns a SeqRecord for each iteration
     
@@ -64,7 +68,7 @@ def UniprotIterator(handle, alphabet=Alphabet.ProteinAlphabet(), return_raw_comm
     
     return_raw_comments = True --> comment fields are returned as complete xml to allow further processing
     skip_parsing_errors = True --> if parsing errors are found, skip to next entry
-    '''
+    """
     if isinstance(alphabet, Alphabet.NucleotideAlphabet):
         raise ValueError, "Wrong alphabet %r" % alphabet
     if isinstance(alphabet, Alphabet.Gapped):
@@ -77,48 +81,53 @@ def UniprotIterator(handle, alphabet=Alphabet.ProteinAlphabet(), return_raw_comm
         else:
             raise Exception('An XML-containing handler or an XML string must be passed')
 
+    if ElementTree is None:
+        from Bio import MissingExternalDependencyError
+        raise MissingExternalDependencyError(
+                "No ElementTree module was found. "
+                "Use Python 2.5+, lxml or elementtree if you "
+                "want to use Bio.SeqIO.UniprotIO.")
+        
     for event, elem in ElementTree.iterparse(handle, events=("start", "end")):
         if event=="end" and elem.tag == NS + "entry":
             yield Parser(elem, alphabet=alphabet, return_raw_comments=return_raw_comments).parse()
             elem.clear()
 
-class Parser():
-    '''Parse a UniProt XML entry to a SeqRecord
+class Parser(object):
+    """Parse a UniProt XML entry to a SeqRecord.
+    
     return_raw_comments=True to get back the complete comment field in XML format
     alphabet=Alphabet.ProteinAlphabet()    can be modified if needed, default is protein alphabet.
-    '''
+    """
     def __init__(self, elem, alphabet=Alphabet.ProteinAlphabet(), return_raw_comments=False):
         self.entry=elem
         self.alphabet=alphabet
         self.return_raw_comments=return_raw_comments
     
     def parse(self):
-        '''parse the input '''
+        """Parse the input."""
         assert self.entry.tag == NS + 'entry'
         
         def append_to_annotations(key, value):
-            if not self.ParsedSeqRecord.annotations.has_key(key):
+            if key not in self.ParsedSeqRecord.annotations:
                 self.ParsedSeqRecord.annotations[key]=[]
             if value not in self.ParsedSeqRecord.annotations[key]:
                 self.ParsedSeqRecord.annotations[key].append(value)
             
         def _parse_name(element):
-            '''use name as name'''
             self.ParsedSeqRecord.name=element.text
-            '''add name to dbxrefs'''
             self.ParsedSeqRecord.dbxrefs.append(self.dbname+':'+element.text)
         
         def _parse_accession(element):
             append_to_annotations('accessions', element.text)# to cope with SwissProt plain text parser
-            '''add accessions to dbxrefs'''
             self.ParsedSeqRecord.dbxrefs.append(self.dbname+':'+element.text)
         
         def _parse_protein(element):
-            '''Parse protein names'''
+            """Parse protein names (PRIVATE)."""
             descr_set=False
             for protein_element in element.getchildren():
                 if protein_element.tag in [NS + 'recommendedName', NS + 'alternativeName']:#recommendedName tag are parsed before
-                    '''use protein fields for name and description '''
+                    #use protein fields for name and description
                     for rec_name in protein_element.getchildren():
                         ann_key='%s_%s' % (protein_element.tag.replace(NS,''), rec_name.tag.replace(NS,''))
                         append_to_annotations(ann_key, rec_name.text)
@@ -132,7 +141,7 @@ class Parser():
         
         def _parse_gene(element):
             for genename_element in element.getchildren():  
-                if genename_element.attrib.has_key('type'):
+                if 'type' in genename_element.attrib:
                     ann_key='gene_%s_%s' % (genename_element.tag.replace(NS,''), genename_element.attrib['type'])
                     if genename_element.attrib['type']=='primary':
                         self.ParsedSeqRecord.annotations[ann_key]=genename_element.text
@@ -143,36 +152,43 @@ class Parser():
             append_to_annotations('geneLocation', element.attrib['type'])
         
         def _parse_organism(element):
-            com_name=sci_name=''
+            organism_name = com_name = sci_name = ''
             for organism_element in element.getchildren():  
                 if organism_element.tag==NS + 'name':
-                    if organism_element.attrib['type']== 'scientific':
-                        sci_name=organism_element.text
-                    elif organism_element.attrib['type']== 'common':
-                        com_name=organism_element.text
-                    else:
-                        append_to_annotations("organism_name", organism_element.text)
+                    if organism_element.text:
+                        if organism_element.attrib['type'] == 'scientific':
+                            sci_name = organism_element.text
+                        elif organism_element.attrib['type'] == 'common':
+                            com_name = organism_element.text
+                        else:
+                            #e.g. synonym
+                            append_to_annotations("organism_name", organism_element.text)
                 elif organism_element.tag==NS + 'dbReference':
                     self.ParsedSeqRecord.dbxrefs.append(organism_element.attrib['type']+':'+organism_element.attrib['id'])
                 elif organism_element.tag==NS + 'lineage':
                     for taxon_element in organism_element.getchildren():
                         if taxon_element.tag==NS + 'taxon':
                             append_to_annotations('taxonomy',taxon_element.text)
-            organism_name=sci_name 
-            if com_name:
-                organism_name+=' (%s)'%com_name
+            if sci_name and com_name:
+                organism_name = '%s (%s)' % (sci_name, com_name)
+            elif sci_name:
+                organism_name = sci_name
+            elif com_name:
+                organism_name = com_name
             self.ParsedSeqRecord.annotations['organism']=organism_name
             
         def _parse_organismHost(element):
             for organism_element in element.getchildren():  
                 if organism_element.tag==NS + 'name': 
-                    append_to_annotations("organismHost_name", organism_element.text)
+                    append_to_annotations("organism_host", organism_element.text)
                         
         def _parse_keyword(element):      
             append_to_annotations('keywords',element.text)
         
         def _parse_comment(element):
-            '''Comment fields are very heterogeneus. each type has his own (frequently mutated) schema.
+            """Parse comments (PRIVATE).
+            
+            Comment fields are very heterogeneus. each type has his own (frequently mutated) schema.
             To store all the contained data, more complex data structures are needed, such as 
             annidated dictionaries. This is left to end user, by optionally setting:
             
@@ -210,7 +226,7 @@ class Parser():
                 "online information"
                 "mass spectrometry"
                 "interaction"
-            '''
+            """
             
             simple_comments=["allergen",
                             "biotechnology",
@@ -274,7 +290,7 @@ class Parser():
                     except :#undefined positions or erroneusly mapped
                         pass    
                 mass=element.attrib['mass']
-                method=element.attrib['mass']
+                method=element.attrib['mass'] #TODO - Check this, looks wrong!
                 if start==end==0:  
                     append_to_annotations(ann_key,'undefined:%s|%s'%(mass,method))
                 else:
@@ -287,7 +303,7 @@ class Parser():
                     for id_element in link_element.getiterator(NS +'link'):
                         append_to_annotations(ann_key,'%s@%s'%(element.attrib['name'],link_element.attrib['uri']))            
             
-            '''return raw XML comments if needed '''
+            #return raw XML comments if needed
             if self.return_raw_comments:
                 ann_key='comment_%s_xml' % element.attrib['type'].replace(' ','')
                 append_to_annotations(ann_key,ElementTree.tostring(element))
@@ -295,11 +311,12 @@ class Parser():
         
         def _parse_dbReference(element):
             self.ParsedSeqRecord.dbxrefs.append(element.attrib['type']+':'+element.attrib['id'])
-            '''<dbReference type="PDB" key="11" id="2GEZ">
-               <property value="X-ray" type="method"/>
-               <property value="2.60 A" type="resolution"/>
-               <property value="A/C/E/G=1-192, B/D/F/H=193-325" type="chains"/>
-             </dbReference>'''
+            #e.g.
+            # <dbReference type="PDB" key="11" id="2GEZ">
+            #   <property value="X-ray" type="method"/>
+            #   <property value="2.60 A" type="resolution"/>
+            #   <property value="A/C/E/G=1-192, B/D/F/H=193-325" type="chains"/>
+            # </dbReference>
             if 'type' in element.attrib:
                 if element.attrib['type'] == 'PDB':
                         method=""
@@ -345,24 +362,12 @@ class Parser():
                     pub_type=ref_element.attrib['type']
                     if pub_type=='submission':
                         pub_type+=' to the '+ref_element.attrib['db']
-                    if ref_element.attrib.has_key('name'):
+                    if 'name' in ref_element.attrib:
                         journal_name=ref_element.attrib['name']
-                    if ref_element.attrib.has_key('date'):
-                        pub_date=ref_element.attrib['date']
-                    else:
-                        pub_date=''
-                    if ref_element.attrib.has_key('volume'):
-                        j_volume=ref_element.attrib['volume']
-                    else:
-                        j_volume=''
-                    if ref_element.attrib.has_key('first'):
-                        j_first=ref_element.attrib['first']
-                    else:
-                        j_first=''
-                    if ref_element.attrib.has_key('last'):
-                        j_last=ref_element.attrib['last']
-                    else:
-                        j_last=''
+                    pub_date=ref_element.attrib.get('date','')
+                    j_volume=ref_element.attrib.get('volume','')
+                    j_first=ref_element.attrib.get('first','')
+                    j_last=ref_element.attrib.get('last','')
                     for cit_element in ref_element.getchildren():
                         if cit_element.tag==NS + 'title':
                             reference.title=cit_element.text
@@ -425,13 +430,8 @@ class Parser():
             feature=SeqFeature.SeqFeature()
             for k,v in element.attrib.items():
                 feature.qualifiers[k]=v
-            if element.attrib.has_key('type'):
-                feature.type=element.attrib['type']
-            else:
-                feature.type=''
-            if element.attrib.has_key('type'):
-                feature.type=element.attrib['type']
-            if element.attrib.has_key('id'):
+            feature.type=element.attrib.get('type','')
+            if 'id' in element.attrib:
                 feature.id=element.attrib['id']
             for feature_element in element.getchildren():
                 if feature_element.tag==NS + 'location':
@@ -471,27 +471,25 @@ class Parser():
             self.ParsedSeqRecord.seq=Seq.Seq(seq,self.alphabet)
             
         #============================================#
-        '''Initialize SeqRecord '''
+        #Initialize SeqRecord
         self.ParsedSeqRecord=SeqRecord('', id='') 
         
-        '''Entry attribs parsing '''
-        if self.entry.attrib.has_key('dataset'):
-            self.dbname=self.entry.attrib['dataset']
-        else:
-            self.dbname='UnknownDataset'#this should not happen!
-        '''add attribs to annotations '''
+        #Entry attribs parsing
+        #Unknown dataset should not happen!
+        self.dbname=self.entry.attrib.get('dataset', 'UnknownDataset')
+        #add attribs to annotations
         for k, v in self.entry.attrib.items():
             if k in ("version"):
-                '''original'''
+                #original
                 #self.ParsedSeqRecord.annotations["entry_%s" % k] = int(v)
-                '''to cope with swissProt plain text parser. this can cause errors 
-                if the attrib has the same name of an other annotation'''
+                #To cope with swissProt plain text parser. this can cause errors 
+                #if the attrib has the same name of an other annotation
                 self.ParsedSeqRecord.annotations[k] = int(v)
             else:
                 #self.ParsedSeqRecord.annotations["entry_%s" % k] = v
                 self.ParsedSeqRecord.annotations[k] = v # to cope with swissProt plain text parser
 
-        '''Top-to-bottom entry children parsing '''
+        #Top-to-bottom entry children parsing
         for element in self.entry.getchildren():
             if element.tag==NS + 'name':
                 _parse_name(element)
@@ -532,8 +530,6 @@ class Parser():
         # use first accession as id
         if not self.ParsedSeqRecord.id:
             self.ParsedSeqRecord.id=self.ParsedSeqRecord.annotations['accessions'][0]
-
-
         
         return self.ParsedSeqRecord
         

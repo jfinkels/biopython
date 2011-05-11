@@ -8,6 +8,13 @@ import unittest
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
+#Left as None if the import within UniProtIO fails
+if SeqIO.UniprotIO.ElementTree is None:
+    from Bio import MissingPythonDependencyError
+    raise MissingPythonDependencyError("No ElementTree module was found. "
+                            "Use Python 2.5+, lxml or elementtree if you "
+                            "want to use Bio.SeqIO.UniprotIO.")
+
 from seq_tests_common import compare_reference, compare_record
 
 class TestUniprot(unittest.TestCase):
@@ -58,7 +65,7 @@ class TestUniprot(unittest.TestCase):
         self.assertEqual(seq_record.annotations['version'], 21)
         self.assertEqual(seq_record.annotations['sequence_modified'], '2001-12-01')
         self.assertEqual(seq_record.annotations['keywords'], ['Complete proteome', 'Virus reference strain'])
-        self.assertEqual(seq_record.annotations['organismHost_name'], ['Acheta domesticus', 'House cricket', 'Chilo suppressalis', 'striped riceborer', 'Gryllus bimaculatus', 'Two-spotted cricket', 'Gryllus campestris', 'Spodoptera frugiperda', 'Fall armyworm'])
+        self.assertEqual(seq_record.annotations['organism_host'], ['Acheta domesticus', 'House cricket', 'Chilo suppressalis', 'striped riceborer', 'Gryllus bimaculatus', 'Two-spotted cricket', 'Gryllus campestris', 'Spodoptera frugiperda', 'Fall armyworm'])
         self.assertEqual(seq_record.annotations['created'], '2009-06-16')
         self.assertEqual(seq_record.annotations['organism_name'], ['Chilo iridescent virus'])
         self.assertEqual(seq_record.annotations['organism'], 'Invertebrate iridescent virus 6 (IIV-6)')
