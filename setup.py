@@ -211,7 +211,6 @@ PACKAGES = [
     'Bio.Align',
     'Bio.Align.Applications',
     'Bio.AlignIO',
-    'Bio.AlignAce',
     'Bio.Alphabet',
     'Bio.Application',
     'Bio.Blast',
@@ -225,7 +224,6 @@ PACKAGES = [
     'Bio.Entrez',
     'Bio.Enzyme',
     'Bio.ExPASy',
-    'Bio.Fasta',
     'Bio.FSSP',
     'Bio.GA',
     'Bio.GA.Crossover',
@@ -244,7 +242,6 @@ PACKAGES = [
     'Bio.KEGG.Enzyme',
     'Bio.KEGG.Map',
     'Bio.Medline',
-    'Bio.MEME',
     'Bio.Motif',
     'Bio.Motif.Parsers',
     'Bio.Motif.Applications',
@@ -298,18 +295,12 @@ elif sys.version_info[0] == 3:
 else :
     EXTENSIONS = [
     Extension('Bio.cpairwise2',
-              ['Bio/cpairwise2module.c',
-               'Bio/csupport.c'],
+              ['Bio/cpairwise2module.c'],
               include_dirs=["Bio"]
               ),
     Extension('Bio.trie',
               ['Bio/triemodule.c',
                'Bio/trie.c'],
-              include_dirs=["Bio"]
-              ),
-    Extension('Bio.cMarkovModel',
-              ['Bio/cMarkovModelmodule.c',
-               'Bio/csupport.c'],
               include_dirs=["Bio"]
               ),
 #Commented out due to the build dependency on flex, see Bug 2619

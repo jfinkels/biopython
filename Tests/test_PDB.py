@@ -17,8 +17,8 @@ from StringIO import StringIO
 try:
     import numpy
 except ImportError:
-    from Bio import MissingExternalDependencyError
-    raise MissingExternalDependencyError(\
+    from Bio import MissingPythonDependencyError
+    raise MissingPythonDependencyError(
         "Install NumPy if you want to use Bio.PDB.")
 
 from Bio.Seq import Seq
@@ -35,9 +35,6 @@ class A_ExceptionTest(unittest.TestCase):
     These tests must be executed because of the way Python's warnings module
     works -- a warning is only logged the first time it is encountered.
     """
-    def setUp(self):
-        warnings.resetwarnings()
-
     def test_1_warnings(self):
         """Check warnings: Parse a flawed PDB file in permissive mode.
 
@@ -50,7 +47,7 @@ class A_ExceptionTest(unittest.TestCase):
             orig_showwarning = warnings.showwarning
             all_warns = []
             def showwarning(*args, **kwargs):
-                all_warns.append(*args[0])
+                all_warns.append(args[0])
             warnings.showwarning = showwarning
             # Trigger warnings
             p = PDBParser(PERMISSIVE=True)
@@ -132,10 +129,10 @@ class HeaderTests(unittest.TestCase):
 
 class ParseTest(unittest.TestCase):
     def setUp(self):
-        warnings.resetwarnings()
         warnings.simplefilter('ignore', PDBConstructionWarning)
         p = PDBParser(PERMISSIVE=1)
         self.structure = p.get_structure("example", "PDB/a_structure.pdb")
+        warnings.filters.pop()
  
     def test_c_n(self):
         """Extract polypeptides using C-N."""
@@ -484,10 +481,61 @@ class ParseTest(unittest.TestCase):
 
 class ParseReal(unittest.TestCase):
     """Testing with real PDB files."""
+    
+    def test_c_n(self):
+        """Extract polypeptides from 1A80."""
+        parser = PDBParser(PERMISSIVE=False)
+        structure = parser.get_structure("example", "PDB/1A8O.pdb")
+        self.assertEqual(len(structure), 1)
+        for ppbuild in [PPBuilder(), CaPPBuilder()]:
+            #==========================================================
+            #First try allowing non-standard amino acids,
+            polypeptides = ppbuild.build_peptides(structure[0], False)
+            self.assertEqual(len(polypeptides), 1)
+            pp = polypeptides[0]
+            # Check the start and end positions
+            self.assertEqual(pp[0].get_id()[1], 151)
+            self.assertEqual(pp[-1].get_id()[1], 220)
+            # Check the sequence
+            s = pp.get_sequence()
+            self.assertTrue(isinstance(s, Seq))
+            self.assertEqual(s.alphabet, generic_protein)
+            #Here non-standard MSE are shown as M
+            self.assertEqual("MDIRQGPKEPFRDYVDRFYKTLRAEQASQEVKNWMTETLLVQ"
+                             "NANPDCKTILKALGPGATLEEMMTACQG", str(s))
+            #==========================================================
+            #Now try strict version with only standard amino acids
+            #Should ignore MSE 151 at start, and then break the chain
+            #at MSE 185, and MSE 214,215
+            polypeptides = ppbuild.build_peptides(structure[0], True)
+            self.assertEqual(len(polypeptides), 3)
+            #First fragment
+            pp = polypeptides[0]
+            self.assertEqual(pp[0].get_id()[1], 152)
+            self.assertEqual(pp[-1].get_id()[1], 184)
+            s = pp.get_sequence()
+            self.assertTrue(isinstance(s, Seq))
+            self.assertEqual(s.alphabet, generic_protein)
+            self.assertEqual("DIRQGPKEPFRDYVDRFYKTLRAEQASQEVKNW", str(s))
+            #Second fragment
+            pp = polypeptides[1]
+            self.assertEqual(pp[0].get_id()[1], 186)
+            self.assertEqual(pp[-1].get_id()[1], 213)
+            s = pp.get_sequence()
+            self.assertTrue(isinstance(s, Seq))
+            self.assertEqual(s.alphabet, generic_protein)
+            self.assertEqual("TETLLVQNANPDCKTILKALGPGATLEE", str(s))
+            #Third fragment
+            pp = polypeptides[2]
+            self.assertEqual(pp[0].get_id()[1], 216)
+            self.assertEqual(pp[-1].get_id()[1], 220)
+            s = pp.get_sequence()
+            self.assertTrue(isinstance(s, Seq))
+            self.assertEqual(s.alphabet, generic_protein)
+            self.assertEqual("TACQG", str(s))
 
     def test_strict(self):
         """Parse 1A8O.pdb file in strict mode."""
-        warnings.resetwarnings()
         parser = PDBParser(PERMISSIVE=False)
         structure = parser.get_structure("example", "PDB/1A8O.pdb")
         self.assertEqual(len(structure), 1)
@@ -606,10 +654,10 @@ class ParseReal(unittest.TestCase):
 class Exposure(unittest.TestCase):
     "Testing Bio.PDB.HSExposure."
     def setUp(self):
-        warnings.resetwarnings()
         warnings.simplefilter('ignore', PDBConstructionWarning)
         pdb_filename = "PDB/a_structure.pdb"
         structure=PDBParser(PERMISSIVE=True).get_structure('X', pdb_filename)
+        warnings.filters.pop()
         self.model=structure[1]
         #Look at first chain only
         a_residues=list(self.model["A"].child_list)

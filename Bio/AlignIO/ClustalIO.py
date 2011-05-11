@@ -63,7 +63,7 @@ class ClustalWriter(SequentialAlignmentWriter):
                 #identifier when output in the file by replacing
                 #them with underscores:
                 line = record.id[0:30].replace(" ","_").ljust(36)
-                line += record.seq.data[cur_char:(cur_char + show_num)]
+                line += record.seq[cur_char:(cur_char + show_num)].tostring()
                 output += line + "\n"
 
             # now we need to print out the star info, if we've got it
@@ -91,7 +91,7 @@ class ClustalIterator(AlignmentIterator):
         except AttributeError:      
             line = handle.readline()
         if not line:
-            return None
+            raise StopIteration
 
         #Whitelisted headers we know about
         known_headers = ['CLUSTAL', 'PROBCONS', 'MUSCLE']
@@ -245,7 +245,7 @@ class ClustalIterator(AlignmentIterator):
 
         assert len(ids) == len(seqs)
         if len(seqs) == 0 or len(seqs[0]) == 0:
-            return None
+            raise StopIteration
 
         if self.records_per_alignment is not None \
         and self.records_per_alignment != len(ids):
